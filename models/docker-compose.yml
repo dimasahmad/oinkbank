@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_USER: bootcamp
+      POSTGRES_PASSWORD: bootcamp
+      POSTGRES_DB: bootcamp
+    networks:
+      - 'db-network'
+    volumes:
+      - "db-data:/var/lib/postgresql/data"
+    restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
+    stop_grace_period: "3s"
+    ports:
+      - 5432:5432
+
+  adminer:
+    image: adminer
+    networks:
+      - 'db-network'
+    restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
+    depends_on:
+      - db
+    ports:
+      - 8080:8080
+
+  pgadmin:
+    image: dpage/pgadmin4
+    networks:
+      - 'db-network'
+    restart: "${DOCKER_RESTART_POLICY:-unless-stopped}"
+    depends_on:
+      - db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: bootcamp@makersinstitute.io
+      PGADMIN_DEFAULT_PASSWORD: bootcamp
+    ports:
+      - "5050:80"
+
+networks:
+  db-network: {}
+
+volumes:
+  db-data: {}
