@@ -1,0 +1,14 @@
+{
+  "name": "Bank Makers Institute",
+  "phone_number": "+628112357444",
+  "description": "Kantor Pusat",
+  "address": {
+    "address": "Jl. Dr. Rum no. 26a",
+    "rt": 0,
+    "rw": 0,
+    "subdistrict_uuid": "255c0a20-ef0c-4f57-9a5a-ba3251b34d61",
+    "district_uuid": "cd7ef6fe-fa66-4473-8b90-e990b8584421",
+    "city_uuid": "6ba1afa4-18aa-40c4-9e83-694f143ca19d",
+    "province_uuid": "87e147cc-f938-43b9-a209-c13561ebc63c"
+  }
+}
