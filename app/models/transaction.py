@@ -1,36 +1,45 @@
-from enum import Enum, IntEnum
-from sqlmodel import SQLModel, Field
-from typing import Optional
-from uuid import UUID, uuid4
-from datetime import datetime
-from sqlalchemy.sql.expression import text
+from sqlmodel import SQLModel, Field, Relationship, text
 from pydantic import EmailStr, validator
-import re
 
-from app.models import account
+from enum import Enum, IntEnum
+from uuid import UUID, uuid4
+from datetime import date, datetime
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlmodel.main import Relationship
+
+from app.models.account import AccountRead
+
+if TYPE_CHECKING:
+    from app.models.account import Account
 
 
 class TransactionType(IntEnum):
-    debit = 1,
-    credit = 2
+    DEPOSIT = 1
+    WITHDRAWAL = 2
+    TRANSFER = 3
+    INTEREST = 4
+    FEE = 5
 
+class TransferFund(SQLModel):
+    account_number: str
 
 class TransactionBase(SQLModel):
     type: TransactionType
     amount: float = Field(default=0)
     status: bool = Field(default=False)
-    details: str
+    details: Optional[str]
 
 
 class Transaction(TransactionBase, table=True):
+    account_uuid: UUID = Field(foreign_key="account.uuid", index=True)
+    account: "Account" = Relationship(back_populates="transactions")
+
     uuid: Optional[UUID] = Field(
         default_factory=uuid4,
         primary_key=True,
         sa_column_kwargs={"server_default": text("uuid_generate_v4()")},
     )
-
-    account_uuid: UUID = Field(foreign_key="account.uuid", index=True)
-
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -48,16 +57,13 @@ class Transaction(TransactionBase, table=True):
 
 
 class TransactionCreate(TransactionBase):
-    pass
+    transfer: Optional[TransferFund] = None
 
 
 class TransactionRead(TransactionBase):
-    uuid: UUID
+    # account: AccountRead
     account_uuid: UUID
-    created_at: UUID
-    updated_at: UUID
+    uuid: UUID
+    created_at: datetime
+    updated_at: datetime
 
-
-class TransactionUpdate(SQLModel):
-    type: Optional[TransactionType]
-    details: Optional[str]

@@ -1,114 +1,136 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, status
 from fastapi.exceptions import HTTPException
 from sqlmodel import Session, select
-from app.dependencies import engine
-from app.models.branch import Branch, BranchCreate, BranchRead, BranchUpdate
-from app.models.address import Address
 from typing import List
 from uuid import UUID
+
+from app.dependencies import db_session, engine, authenticate_user
+
+from app.models.branch import Branch, BranchCreate, BranchRead, BranchUpdate
+from app.models.address import Address
+from app.models.user import User, UserRole
 
 
 router = APIRouter()
 
 
 @router.post("", response_model=BranchRead)
-def create(branch_create: BranchCreate):
-    with Session(engine) as session:
-        address = Address(**branch_create.address.dict())
-        session.add(address)
-        session.commit()
-        session.refresh(address)
+def create(
+    create: BranchCreate,
+    current_user: User = Depends(authenticate_user),
+    session: Session = Depends(db_session),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-        branch = Branch(**branch_create.dict(), address_uuid=address.uuid)
-        session.add(branch)
-        session.commit()
-        session.refresh(branch)
+    # TODO: Find a way to use simple relation create, ex:
+    # >>> Branch.from_orm(create)
+    branch = Branch(**create.dict(exclude={"address": ...}))
+    branch.address = Address(**create.address.dict())
+
+    session.add(branch)
+    session.commit()
+    session.refresh(branch)
+
+    return branch
+
+
+@router.get("", response_model=List[BranchRead])
+def index(session: Session = Depends(db_session)):
+    statement = select(Branch).where(Branch.deleted_at == None)
+
+    return session.exec(statement).all()
+
+
+@router.get("/{uuid}", response_model=BranchRead)
+def read(uuid: UUID, session: Session = Depends(db_session)):
+    statement = (
+        select(Branch, Address)
+        .join(Address)
+        .where(Branch.uuid == uuid, Branch.deleted_at == None)
+    )
+    branch, address = session.exec(statement).one_or_none()
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resourse not found"
+        )
 
     return BranchRead(**branch.dict(), address=address)
 
 
-@router.get("", response_model=List[BranchRead])
-def index():
-    with Session(engine) as session:
-        statement = (
-            select(Branch, Address).join(Address).where(Branch.deleted_at == None)
-        )
-
-        return [
-            BranchRead(**branch.dict(), address=address)
-            for branch, address in session.exec(statement)
-        ]
-
-
-@router.get("/{uuid}", response_model=BranchRead)
-def read(uuid: UUID):
-    with Session(engine) as session:
-        statement = (
-            select(Branch, Address)
-            .join(Address)
-            .where(Branch.uuid == uuid, Branch.deleted_at == None)
-        )
-        branch, address = session.exec(statement).one()
-
-        return BranchRead(**branch.dict(), address=address)
-
-
 @router.patch("/{uuid}", response_model=BranchRead)
-def update(uuid: UUID, branch_update: BranchUpdate):
-    with Session(engine) as session:
-        statement = (
-            select(Branch, Address)
-            .join(Address)
-            .where(Branch.uuid == uuid, Branch.deleted_at == None)
+def update(
+    uuid: UUID,
+    branch_update: BranchUpdate,
+    current_user: User = Depends(authenticate_user),
+    session: Session = Depends(db_session),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    statement = (
+        select(Branch, Address)
+        .join(Address)
+        .where(Branch.uuid == uuid, Branch.deleted_at == None)
+    )
+    branch, address = session.exec(statement).one_or_none()
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found"
         )
-        branch, address = session.exec(statement).one_or_none()
-        if not branch:
-            raise HTTPException(status_code=404, detail="Branch not found")
 
-        branch_data = branch_update.dict(exclude_unset=True)
-        for key, value in branch_data.items():
-            if key == "address":
-                address_data = value
-                for k, v in address_data.items():
-                    setattr(address, k, v)
+    branch_data = branch_update.dict(exclude_unset=True)
+    for key, value in branch_data.items():
+        if key == "address":
+            address_data = value
+            for k, v in address_data.items():
+                setattr(address, k, v)
 
-                address.updated_at = "now()"
+            address.updated_at = "now()"
 
-                session.add(address)
-                session.commit()
-                session.refresh(address)
+            session.add(address)
+            session.commit()
+            session.refresh(address)
 
-                continue
+            continue
 
-            setattr(branch, key, value)
+        setattr(branch, key, value)
 
-        branch.updated_at = "now()"
+    branch.updated_at = "now()"
 
-        session.add(branch)
-        session.commit()
-        session.refresh(branch)
+    session.add(branch)
+    session.commit()
+    session.refresh(branch)
 
-        return BranchRead(**branch.dict(), address=address)
+    return BranchRead(**branch.dict(), address=address)
 
 
 @router.delete("/{uuid}")
-def delete(uuid: UUID):
-    with Session(engine) as session:
-        statement = (
-            select(Branch, Address)
-            .join(Address)
-            .where(Branch.uuid == uuid, Branch.deleted_at == None)
+def delete(
+    uuid: UUID,
+    current_user: User = Depends(authenticate_user),
+    session: Session = Depends(db_session),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    statement = (
+        select(Branch, Address)
+        .join(Address)
+        .where(Branch.uuid == uuid, Branch.deleted_at == None)
+    )
+    branch, address = session.exec(statement).one_or_none()
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found"
         )
-        branch, address = session.exec(statement).one_or_none()
-        if not branch:
-            raise HTTPException(status_code=404, detail="Branch not found")
 
-        # let the SQL server do the time calculation
-        branch.deleted_at = "now()"
-        address.deleted_at = "now()"
+    # let the SQL server do the time calculation
+    branch.deleted_at = "now()"
+    address.deleted_at = "now()"
 
-        session.add(branch)
-        session.add(address)
-        session.commit()
+    session.add(branch)
+    session.add(address)
+    session.commit()
 
-        return None, 204
+    return None, status.HTTP_204_NO_CONTENT

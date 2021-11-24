@@ -5,7 +5,7 @@ from .dependencies import engine
 from .routers.api import api
 
 # Init fastapi
-app = FastAPI()
+app = FastAPI(title="Oink Bank")
 
 # Init routes
 app.include_router(api)

@@ -1,21 +1,25 @@
-from enum import Enum
-from sqlmodel import SQLModel, Field
-from typing import Optional
+from sqlmodel import SQLModel, Field, Relationship, text
+from pydantic import EmailStr, validator
+
+from enum import Enum, IntEnum
 from uuid import UUID, uuid4
 from datetime import datetime
-from sqlalchemy.sql.expression import text
-from pydantic import EmailStr, validator
-import re
+from typing import TYPE_CHECKING, List, Optional
 
+from app.models.branch import BranchRead
 from app.models.user import UserRead
 
+if TYPE_CHECKING:
+    from app.models.branch import Branch
+    from app.models.user import User
+    from app.models.transaction import Transaction
 
 class Currency(str, Enum):
     IDR = "IDR"
 
 
 class AccountBase(SQLModel):
-    number: int
+    number: str
     balance: float = Field(
         default=0, nullable=False, sa_column_kwargs={"server_default": "0"}
     )
@@ -29,14 +33,17 @@ class AccountBase(SQLModel):
 
 
 class Account(AccountBase, table=True):
+    user_uuid: UUID = Field(foreign_key="user.uuid", index=True)
+    branch_uuid: UUID = Field(foreign_key="branch.uuid", index=True)
+
+    user: "User" = Relationship(back_populates="accounts")
+    branch: "Branch" = Relationship(back_populates="accounts")
+
     uuid: UUID = Field(
         default_factory=uuid4,
         primary_key=True,
         sa_column_kwargs={"server_default": text("uuid_generate_v4()")},
     )
-
-    user_uuid: UUID = Field(foreign_key="user.uuid", index=True)
-
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -52,20 +59,22 @@ class Account(AccountBase, table=True):
     )
     deleted_at: Optional[datetime]
 
+    transactions: List["Transaction"] = Relationship(back_populates="account")
+
 
 class AccountCreate(AccountBase):
-    pass
+    user_uuid: UUID
+    branch_uuid: UUID
 
 
 class AccountRead(AccountBase):
+    user: UserRead
+    branch: BranchRead
     uuid: UUID
     created_at: datetime
     updated_at: datetime
 
 
 class AccountUpdate(SQLModel):
-    number: Optional[int]
-    balance: Optional[float]
-    currency: Optional[Currency]
     minimum_balance: Optional[float]
     interest: Optional[float]

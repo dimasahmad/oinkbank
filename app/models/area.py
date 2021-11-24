@@ -19,7 +19,6 @@ class Area(AreaBase, table=True):
         primary_key=True,
         sa_column_kwargs={"server_default": text("uuid_generate_v4()")},
     )
-
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -34,3 +33,7 @@ class Area(AreaBase, table=True):
         },
     )
     deleted_at: Optional[datetime]
+
+class AreaRead(SQLModel):
+    name: str
+    uuid: UUID
