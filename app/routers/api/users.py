@@ -48,7 +48,7 @@ def read(
     current_user: User = Depends(authenticate_user),
     session: Session = Depends(db_session),
 ):
-    if current_user.uuid != uuid or current_user.role != UserRole.ADMIN:
+    if current_user.uuid != uuid and current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     statement = select(User).where(User.uuid == uuid, User.deleted_at == None)
@@ -98,7 +98,7 @@ def update(
     current_user: User = Depends(authenticate_user),
     session: Session = Depends(db_session),
 ):
-    if current_user.uuid != uuid or current_user.role != UserRole.ADMIN:
+    if current_user.uuid != uuid and current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     statement = select(User).where(User.uuid == uuid, User.deleted_at == None)
