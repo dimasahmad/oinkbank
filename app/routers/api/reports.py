@@ -11,14 +11,14 @@ from app.models.address import Address
 from app.models.branch import Branch, BranchRead
 from app.models.account import Account
 from app.models.transaction import Transaction, TransactionType
-from app.models.report import AccountInactive, AccountsUsers, BranchReport, Transactions
+from app.models.report import AccountInactive, AccountsUsers, Transactions
 from app.models.user import User, UserRole
 
 
 router = APIRouter()
 
 
-@router.get("/accounts_users", response_model=AccountsUsers)
+@router.get("/accounts_users")
 def branches(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
@@ -29,7 +29,7 @@ def branches(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     accounts_stmt = select(func.count(Account.uuid).label("account_count"))
-    users_stmt = select(func.count(User.uuid).label("users_count"))
+    users_stmt = select(func.count(User.uuid).label("users_count")).where(User.role <= UserRole.CONSUMER)
 
     if start_date:
         accounts_stmt = accounts_stmt.where(
@@ -46,13 +46,13 @@ def branches(
             User.created_at <= datetime.combine(end_date, time(0, 0, 0))
         )
 
-    return AccountsUsers(
-        accounts_count=session.exec(accounts_stmt).one(),
-        users_count=session.exec(users_stmt).one(),
-    )
+    return {
+        "accounts_count": session.exec(accounts_stmt).one(),
+        "users_count": session.exec(users_stmt).one(),
+    }
 
 
-@router.get("/transactions", response_model=Transactions)
+@router.get("/transactions")
 def branches(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
@@ -89,12 +89,12 @@ def branches(
     deposits_count, deposits_total = session.exec(deposits_stmt).one()
     withdrawals_count, withdrawals_total = session.exec(withdrawals_stmt).one()
 
-    return Transactions(
-        deposits_count=deposits_count,
-        deposits_total=deposits_total,
-        withdrawals_count=withdrawals_count,
-        withdrawals_total=withdrawals_total,
-    )
+    return {
+        "deposits_count": deposits_count,
+        "deposits_total": deposits_total,
+        "withdrawals_count": withdrawals_count,
+        "withdrawals_total": withdrawals_total,
+    }
 
 
 @router.get("/total_balance")
@@ -105,7 +105,9 @@ def branches(
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-    balance_stmt = select(func.sum(Account.balance).label("balance_total")).where(Account.deleted_at == None)
+    balance_stmt = select(func.sum(Account.balance).label("balance_total")).where(
+        Account.deleted_at == None
+    )
 
     return {"balance_total": session.exec(balance_stmt).one()}
 
